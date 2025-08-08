@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres-keycloak
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: proyectos
+      POSTGRES_USER: proyectos_user
+      POSTGRES_PASSWORD: Arm@d@2025
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d/
+    ports:
+      - "5432:5432"
+
+  keycloak:
+    build:
+      context: ./keycloak
+    container_name: keycloak-dev
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/proyectos
+      KC_DB_USERNAME: proyectos_user
+      KC_DB_PASSWORD: Arm@d@2025
+      KC_DB_SCHEMA: keycloak_schema
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+    command: ["start-dev"]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+
+  nfs-server:
+    image: itsthenetwork/nfs-server-alpine:latest
+    container_name: nfs-server
+    privileged: true
+    environment:
+      SHARED_DIRECTORY: /nfs-data
+    volumes:
+      - nfs_data:/nfs-data
+    ports:
+      - "2049:2049"
+
+  administracion-documentos:
+    build:
+      context: ./servicios/administracion-documentos  # Asegúrate de que la ruta sea correcta
+    container_name: administracion-documentos
+    depends_on:
+      - postgres
+      - rabbitmq
+      - nfs-server
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/proyectos
+      SPRING_DATASOURCE_USERNAME: proyectos_user
+      SPRING_DATASOURCE_PASSWORD: Arm@d@2025
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: admin
+      RABBITMQ_PASSWORD: admin123
+      DOCUMENTOS_PATH_NFS: /nfs-data/
+    ports:
+      - "8081:8081"
+    volumes:
+      - nfs_data:/nfs-data
+  notificaciones:
+    build:
+      context: ./servicios/notificaciones
+    container_name: notificaciones
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      # --- DB (apuntamos al mismo Postgres y DB 'proyectos', pero en schema 'notificaciones') ---
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/proyectos
+      SPRING_DATASOURCE_USERNAME: proyectos_user
+      SPRING_DATASOURCE_PASSWORD: Arm@d@2025
+      # Si usas schema dedicado, añade: SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=notificaciones
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: notificaciones   # <— opcional si ya usas currentSchema
+
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_SCHEMAS: notificaciones                            # <— importante
+      SPRING_FLYWAY_DEFAULT_SCHEMA: notificaciones                     # <— importante
+      # --- RabbitMQ (usa SIEMPRE el prefijo SPRING_) ---
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin123
+
+      # --- SMTP (usa tus secretos reales) ---
+      SMTP_HOST: smtp.zoho.com
+      SMTP_USER: comercial@gpsrealtime.com.co
+      SMTP_PASS: ai10rnYu@
+      SMTP_PORT: 587
+
+      # --- Propiedades personalizadas del servicio ---
+      NOTIFICACIONES_CORREO_DEFAULT-FROM: gerencia@gyoingenieria.com
+      NOTIFICACIONES_RABBITMQ_EXCHANGE: notificaciones.exchange
+      NOTIFICACIONES_RABBITMQ_ROUTING-KEY: notificaciones.email
+      NOTIFICACIONES_RABBITMQ_QUEUE: notificaciones.queue
+      NOTIFICACIONES_RABBITMQ_DLQ: notificaciones.queue.dlq
+      NOTIFICACIONES_RABBITMQ_MAX-RETRY: 5
+
+      # Opcional: perfil
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8092:8092"
+
+volumes:
+  postgres_data:
+  nfs_data:
