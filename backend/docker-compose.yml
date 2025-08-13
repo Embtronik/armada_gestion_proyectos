@@ -119,6 +119,41 @@ services:
       SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8092:8092"
+  
+  e-sign:
+    build:
+      context: ./servicios/e-sign   # ajusta si tu carpeta se llama distinto
+    container_name: e-sign
+    depends_on:
+      - postgres
+      - notificaciones
+      - keycloak
+    environment:
+      # --- BD (mismo Postgres) ---
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/proyectos
+      SPRING_DATASOURCE_USERNAME: proyectos_user
+      SPRING_DATASOURCE_PASSWORD: Arm@d@2025
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+
+      # --- Config app/OTP ---
+      ESIGN_TTL_MINUTES: 0
+      ESIGN_TTL_SECONDS: 300
+      APP_NAME: RDM
+      SUPPORT_EMAIL: soporte@empresa.com
+
+      # --- Cliente al micro de notificaciones (REST interno) ---
+      NOTIFICACIONES_BASE_URL: http://notificaciones:8092
+
+      # --- Seguridad (si usas resource server) ---
+      # KEYCLOAK_ISSUER_URI: http://keycloak-dev:8080/realms/proyectos
+      # SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
+
+      SERVER_PORT: 8082
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8082:8082"
 
 volumes:
   postgres_data:

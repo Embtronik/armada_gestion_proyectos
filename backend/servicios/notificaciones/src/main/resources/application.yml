@@ -38,7 +38,7 @@ spring:
 
 notificaciones:
   correo:
-    default-from: "notificaciones@tu-dominio.com"
+    default-from: ${SMTP_FROM:comercial@gpsrealtime.com.co}
   rabbitmq:
     exchange: notificaciones.exchange
     routing-key: notificaciones.email
